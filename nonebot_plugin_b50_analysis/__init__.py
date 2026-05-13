@@ -19,9 +19,9 @@ __plugin_meta__ = PluginMetadata(
     description="舞萌DX B50数据分析，生成锐评文本和分析图",
     homepage="https://github.com/HanYaaaaaaa/nonebot-plugin-b50-analysis",
     usage=(
-        "分析b50          —— 默认风格分析自己的B50\n"
-        "分析b50 [风格/需求]  —— 用指定风格或需求分析自己的B50\n"
-        "示例：分析b50 用可爱的语气"
+        "锐评成绩          —— 默认风格分析自己的B50\n"
+        "锐评成绩 [风格/需求]  —— 用指定风格或需求分析自己的B50\n"
+        "示例：锐评成绩 用可爱的语气"
     ),
     type="application",
     config=Config,
@@ -32,8 +32,8 @@ _cfg = get_plugin_config(Config)
 _peer_stats = load_peer_stats(_cfg.b50_assets_path)
 
 b50_cmd = on_command(
-    "分析b50",
-    aliases={"b50分析", "分析B50", "B50分析"},
+    "锐评成绩",
+    aliases={"成绩锐评", "锐评B50", "B50锐评"},
     priority=5,
     block=True,
 )
