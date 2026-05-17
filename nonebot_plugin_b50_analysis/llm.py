@@ -244,6 +244,13 @@ def _merge_push_recommendations(raw_items: list, fallback_items: list[dict]) -> 
     by_key = {_song_key(item): dict(item) for item in fallback_list if _song_key(item)}
     by_title = {_clean_text(item.get("title"), 80).lower(): dict(item) for item in fallback_list if _clean_text(item.get("title"), 80)}
 
+    def _has_card_payload(song: dict) -> bool:
+        return bool(
+            str(song.get("music_id") or song.get("song_id") or song.get("musicId") or "").strip()
+            and song.get("ds") is not None
+            and (song.get("achievement") is not None or song.get("achievements") is not None)
+        )
+
     merged: list[dict] = []
     seen: set[str] = set()
     for raw in raw_items or []:
@@ -259,6 +266,8 @@ def _merge_push_recommendations(raw_items: list, fallback_items: list[dict]) -> 
                 if raw_title.lower() in title_key or title_key in raw_title.lower():
                     base = dict(item)
                     break
+        if not base and not _has_card_payload(raw):
+            continue
         item = dict(base)
         item.update({k: v for k, v in raw.items() if k not in {"reason", "recommend_reason", "strategy_tag", "title"}})
         item["title"] = raw_title or str(base.get("title") or "")
@@ -266,6 +275,8 @@ def _merge_push_recommendations(raw_items: list, fallback_items: list[dict]) -> 
         item["strategy_tag"] = _normalize_strategy_tag(str(raw.get("strategy_tag") or base.get("strategy_tag") or ""))
         item["reason"] = _clean_text(raw.get("reason") or raw.get("recommend_reason") or base.get("reason") or base.get("recommend_reason"), 40)
         merged_item = _prepare_push_song(item, item.get("strategy_tag") or _PUSH_TAGS["overall"], item.get("reason"))
+        if not _has_card_payload(merged_item):
+            continue
         key = _song_key(merged_item) or merged_item.get("title")
         if not key or key in seen or not merged_item.get("title"):
             continue

@@ -299,7 +299,19 @@ class _Draw:
         for i, line in enumerate(lines2):
             self.d.text((1130, 325 + i * step2), line, font=f2, fill=(198, 40, 40))
 
-    def song_card(self, x: int, y: int, w: int, h: int, song: dict, label: str, lc: Any, bg: Any, show_peer: bool = False) -> None:
+    def song_card(
+        self,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        song: dict,
+        label: str,
+        lc: Any,
+        bg: Any,
+        show_peer: bool = False,
+        show_reason: bool = False,
+    ) -> None:
         self.rrect((x, y, x + w, y + h), 14, bg)
         mid = song.get("music_id") or song.get("musicId") or ""
         level_idx = _i(song.get("level_index"), -1)
@@ -369,6 +381,17 @@ class _Draw:
                 gap_x = tx + self.font("cn", 20).getbbox(p_text)[2] + 8
                 self.d.text((gap_x, row2_y), f"ARPI {gap:+.4f}", font=self.font("en", 24), fill=(46, 125, 50) if gap >= 0 else (198, 40, 40))
         row3_y = y + 177
+        if show_reason:
+            reason = " ".join(str(song.get("reason") or song.get("recommend_reason") or "").replace("\r", " ").replace("\n", " ").split())
+            if reason:
+                reason_font, reason_lines, reason_step = self.fit_text(reason, 560, 2, 18, 14)
+                reason_y = row2_y + 28
+                self.d.text((tx, reason_y), "推荐理由", font=self.font("cn", 16), fill=(160, 96, 32))
+                text_y = reason_y + 20
+                for line in reason_lines:
+                    self.d.text((tx, text_y), line, font=reason_font, fill=(95, 85, 65))
+                    text_y += reason_step
+                row3_y = max(row3_y, text_y + 2)
         chart_summaries = self.data.get("chart_summaries") or {}
         summary = chart_summaries.get(str(mid)) or {}
         config_tags = summary.get("config_tags") or song.get("config_tags") or song.get("config") or song.get("keywords") or []
@@ -400,15 +423,15 @@ class _Draw:
         cy = 450
         card_h = 210
         sections = [
-            ("亮点谱面", "highlights", "亮点", (46, 125, 50), (120, 200, 125, 230), True, 4),
-            ("普通点", "ordinaries", "普通", (198, 40, 40), (235, 150, 150, 230), True, 2),
-            ("单曲RA最高", "highest_song_rating", "最高RA", (232, 124, 32), (255, 200, 140, 230), False, 1),
-            ("B50重合极值", "overlap_extremes", "重合", (66, 133, 244), (150, 200, 250, 230), False, 2),
-            ("推分推荐", "push_recommendations", "推分", (232, 124, 32), (255, 210, 155, 230), False, 3),
-            ("配置特化", "config_specialized", "擅长", (30, 100, 180), (145, 195, 245, 230), False, 2),
-            ("最少游玩", "least_played", "少PC", (120, 80, 200), (185, 170, 240, 230), False, 2),
+            ("亮点谱面", "highlights", "亮点", (46, 125, 50), (120, 200, 125, 230), True, 4, 210, False),
+            ("普通点", "ordinaries", "普通", (198, 40, 40), (235, 150, 150, 230), True, 2, 210, False),
+            ("单曲RA最高", "highest_song_rating", "最高RA", (232, 124, 32), (255, 200, 140, 230), False, 1, 210, False),
+            ("B50重合极值", "overlap_extremes", "重合", (66, 133, 244), (150, 200, 250, 230), False, 2, 210, False),
+            ("推分推荐", "push_recommendations", "推分", (232, 124, 32), (255, 210, 155, 230), False, 3, 252, True),
+            ("配置特化", "config_specialized", "擅长", (30, 100, 180), (145, 195, 245, 230), False, 2, 210, False),
+            ("最少游玩", "least_played", "少PC", (120, 80, 200), (185, 170, 240, 230), False, 2, 210, False),
         ]
-        for title, key, label, color, bg, show_peer, max_n in sections:
+        for title, key, label, color, bg, show_peer, max_n, section_card_h, show_reason in sections:
             songs = (evidence.get(key) or self.data.get(key) or [])[:max_n]
             if not songs:
                 continue
@@ -423,8 +446,8 @@ class _Draw:
                     idx = row_start + col
                     if idx >= len(songs):
                         break
-                    self.song_card(60 + col * 880, cy, 820, card_h, songs[idx], label, color, bg, show_peer)
-                cy += card_h + 15
+                    self.song_card(60 + col * 880, cy, 820, section_card_h, songs[idx], label, color, bg, show_peer, show_reason)
+                cy += section_card_h + 15
         return cy
 
     def draw_analysis(self, start_y: int) -> int:
