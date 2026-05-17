@@ -16,7 +16,7 @@
 ## 安装
 
 ```bash
-nb install nonebot-plugin-b50-analysis
+nb plugin install nonebot-plugin-b50-analysis
 # 或
 pip install nonebot-plugin-b50-analysis
 ```
