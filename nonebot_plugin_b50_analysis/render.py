@@ -174,13 +174,38 @@ class _Draw:
         lines: list[str] = []
         for raw in str(text or "").replace("\r", "").split("\n"):
             cur = ""
-            for ch in raw:
-                if font.getbbox(cur + ch)[2] > max_w:
-                    if cur:
-                        lines.append(cur)
-                    cur = ch
+            i = 0
+            while i < len(raw):
+                if raw[i:i+3] == "<r>":
+                    cur += "<r>"
+                    i += 3
+                elif raw[i:i+4] == "</r>":
+                    cur += "</r>"
+                    i += 4
+                elif font.getbbox(cur + raw[i])[2] <= max_w:
+                    cur += raw[i]
+                    i += 1
                 else:
-                    cur += ch
+                    if not cur:
+                        cur = raw[i]
+                        i += 1
+                        continue
+                    open_count = cur.count("<r>") - cur.count("</r>")
+                    if open_count > 0:
+                        close_pos = cur.rfind("</r>")
+                        open_pos = cur.rfind("<r>")
+                        if close_pos > open_pos:
+                            lines.append(cur[:close_pos + 4])
+                            cur = cur[close_pos + 4:]
+                        elif open_pos != -1:
+                            lines.append(cur[:open_pos])
+                            cur = cur[open_pos:]
+                        else:
+                            lines.append(cur)
+                            cur = ""
+                    else:
+                        lines.append(cur)
+                        cur = ""
             if cur:
                 lines.append(cur)
         return lines
