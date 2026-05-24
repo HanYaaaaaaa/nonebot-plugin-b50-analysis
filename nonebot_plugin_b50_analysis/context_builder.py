@@ -7,6 +7,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from .fetch import get_music_lookup
+
 FC_LABEL_MAP = {"fc": "FC", "fcp": "FC+", "ap": "AP", "app": "AP+"}
 
 
@@ -60,6 +62,7 @@ def load_peer_stats(assets_path: str) -> dict | None:
 def _normalize(chart: dict) -> dict:
     c = dict(chart)
     c["music_id"] = str(c.get("song_id") or c.get("music_id") or "")
+    c["song_id"] = c["music_id"]
     c["achievement"] = _f(c.get("achievements") or c.get("achievement"))
     c["fc_label"] = FC_LABEL_MAP.get(str(c.get("fc") or "").lower(), "")
     return c
@@ -250,6 +253,7 @@ def _build_b50_evidence_pack(charts: list[dict], rating: int, peer_data: dict, c
 
 
 def _calc_ra(ds: float, achievement: float) -> int:
+    import math
     if achievement < 50:
         base = 7.0
     elif achievement < 60:
@@ -278,18 +282,25 @@ def _calc_ra(ds: float, achievement: float) -> int:
         base = 21.6
     else:
         base = 22.4
-    return int(ds * (min(100.5, achievement) / 100) * base)
+    return math.floor(ds * (min(100.5, achievement) / 100) * base)
 
 
 def _build_push_candidates(all_charts: list[dict]) -> list[dict]:
     b35 = [c for c in all_charts if c.get("bucket") == "B35"]
+    b15 = [c for c in all_charts if c.get("bucket") == "B15"]
     b35_ds_list = sorted([_f(c.get("ds")) for c in b35])
     b35_ras = sorted([_i(c.get("ra")) for c in b35], reverse=True)
+    b15_ras = sorted([_i(c.get("ra")) for c in b15], reverse=True)
     ds_floor = b35_ds_list[0] if b35_ds_list else 0
     ds_ceil = b35_ds_list[-1] if b35_ds_list else 0
     b35_floor = b35_ras[-1] if b35_ras else 0
-    b15_ras = sorted([_i(c.get("ra")) for c in all_charts if c.get("bucket") == "B15"], reverse=True)
     b15_floor = b15_ras[-1] if b15_ras else 0
+    
+    if b35_floor == 0 and b15_floor == 0:
+        all_ras = sorted([_i(c.get("ra")) for c in all_charts], reverse=True)
+        if all_ras:
+            b35_floor = all_ras[min(49, len(all_ras)-1)]
+            b15_floor = b35_floor
 
     DS_ABOVE_BUFFER = 0.4
     candidates: list[dict] = []
@@ -301,24 +312,33 @@ def _build_push_candidates(all_charts: list[dict]) -> list[dict]:
         if ds < ds_floor or ds > ds_ceil + DS_ABOVE_BUFFER:
             continue
         bucket = c.get("bucket")
+        is_new = c.get("is_new", False)
+        song_ra = _i(c.get("ra"))
+        
         if bucket:
-            current_ra = _i(c.get("ra"))
+            current_ra = song_ra
         else:
-            current_ra = min(b35_floor, b15_floor)
+            if is_new:
+                current_ra = b15_floor
+            else:
+                current_ra = b35_floor
+        
         gain_1005 = max(0, _calc_ra(ds, 100.5) - current_ra)
         gain_100 = max(0, _calc_ra(ds, 100.0) - current_ra)
-        if ach >= 100.0:
+        if ach >= 100.5:
+            continue
+        elif ach >= 100.0:
             target_gain = gain_1005
             target_label = "SSS+"
         else:
-            if gain_100 >= 2:
+            if gain_1005 >= 2:
+                target_gain = gain_1005
+                target_label = "SSS+"
+            elif gain_100 >= 2:
                 target_gain = gain_100
                 target_label = "SSS"
             else:
-                target_gain = gain_1005
-                target_label = "SSS+"
-        if target_gain < 2:
-            continue
+                continue
         candidates.append({
             "song_id": _i(c.get("song_id") or c.get("music_id")),
             "title": str(c.get("title") or ""),
@@ -328,10 +348,11 @@ def _build_push_candidates(all_charts: list[dict]) -> list[dict]:
             "ds": round(ds, 1),
             "achievements": round(ach, 4),
             "ra": _i(c.get("ra")),
+            "current_ra": current_ra,
             "fc": str(c.get("fc") or c.get("fc_label") or "").lower(),
             "type": str(c.get("type") or "SD").upper(),
-            "gain_100": 0,
-            "gain_1005": target_gain,
+            "gain_100": gain_100,
+            "gain_1005": gain_1005,
             "target": target_label,
         })
     if not candidates:
@@ -361,17 +382,22 @@ def _enrich_push_candidates(
         row = b50_map.get((mid, level_index), {})
         summary = summary_map.get(mid) or {}
         achievement = _f(item.get("achievements") or item.get("achievement"))
+        ds = _f(item.get("ds"))
         item["music_id"] = mid
         item["achievement"] = round(achievement, 4)
         item["achievements"] = round(achievement, 4)
         item["ra"] = _i(item.get("ra") or row.get("ra"))
+        item["target"] = item.get("target") or "SSS+"
+        item["gain_100"] = _i(item.get("gain_100"))
+        item["gain_1005"] = _i(item.get("gain_1005"))
+        item["current_ra"] = _i(item.get("current_ra"))
         item["bucket"] = row.get("bucket") or item.get("bucket") or "候选"
         item["chart_type"] = row.get("type") or row.get("chart_type") or item.get("type") or ""
         item["type"] = row.get("type") or item.get("type") or ""
         item["level_index"] = level_index
         item["level_label"] = str(item.get("level_label") or row.get("level_label") or "")
         item["fc_label"] = str(row.get("fc_label") or item.get("fc_label") or FC_LABEL_MAP.get(str(item.get("fc") or "").lower(), ""))
-        item["play_count"] = _i(row.get("play_count") or row.get("playCount") or item.get("play_count") or item.get("playCount"))
+
         item["peer_avg"] = row.get("peer_avg")
         item["gap"] = row.get("gap")
         item["gap_vs_peer"] = row.get("gap") if row.get("gap") is not None else row.get("gap_vs_peer")
@@ -381,17 +407,15 @@ def _enrich_push_candidates(
         item["chart_identity"] = str(summary.get("chart_identity") or summary.get("community_vibe") or "")[:120]
         item["source"] = "b50_push"
         enriched.append(item)
-
     enriched.sort(
         key=lambda x: (
             -max(_i(x.get("gain_1005"), 0), _i(x.get("gain_100"), 0)),
             -len(x.get("config_tags") or []),
             abs(99.5 - _f(x.get("achievement"), 0.0)),
-            -_i(x.get("play_count"), 0),
             str(x.get("title") or ""),
         )
     )
-    return enriched[:15]
+    return enriched[:50]
 
 
 def _build_config_profile(rows: list[dict], chart_summaries: dict | None = None) -> dict:
@@ -461,19 +485,24 @@ def build_context(b50_data: dict, peer_stats: dict | None = None) -> dict:
     dx_charts = [_normalize(c) for c in ((b50_data.get("charts") or {}).get("dx") or [])]
     if not sd_charts and not dx_charts:
         return {"player": player, "peer_stats": {}, "summary": {}, "evidence": {}, "b50": [], **_load_assets_context(str(b50_data.get("_assets_path") or ""))}
+    for c in sd_charts:
+        c["is_new"] = False
+    for c in dx_charts:
+        c["is_new"] = True
+
     for c in sd_charts[:35]:
         c["bucket"] = "B35"
     for c in dx_charts[:15]:
         c["bucket"] = "B15"
+
     all_charts = sd_charts + dx_charts
-
     assets_ctx = _load_assets_context(str(b50_data.get("_assets_path") or ""))
-
     b50 = [c for c in all_charts if c.get("bucket") in ("B35", "B15")]
     b35 = [c for c in b50 if c.get("bucket") == "B35"]
     b15 = [c for c in b50 if c.get("bucket") == "B15"]
-    b35_ra = sum(_i(c.get("ra")) for c in b35)
-    b15_ra = sum(_i(c.get("ra")) for c in b15)
+
+    b35_ra = int(sum(_i(c.get("ra")) for c in b35))
+    b15_ra = int(sum(_i(c.get("ra")) for c in b15))
     avg_ach = sum(c["achievement"] for c in b50) / len(b50) if b50 else 0.0
     avg_ds = sum(_f(c.get("ds")) for c in b50) / len(b50) if b50 else 0.0
     b35_avg = sum(c["achievement"] for c in b35) / len(b35) if b35 else 0.0

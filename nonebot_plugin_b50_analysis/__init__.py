@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import asyncio
 
 from nonebot import get_driver, get_plugin_config, on_command
 from nonebot.adapters.onebot.v11 import Message, MessageEvent, MessageSegment
@@ -36,11 +37,18 @@ _peer_stats = load_peer_stats(_cfg.b50_assets_path)
 
 driver = get_driver()
 
+_active_tasks: dict[str, asyncio.Task] = {}
+ANALYSIS_TIMEOUT = 60
+
 
 @driver.on_startup
-async def _startup() -> None:
-    """Bot 启动时预拉取曲库数据。"""
-    await init_music_data()
+async def _startup():
+    await init_music_data()    
+
+
+async def _release_lock(qq: str):
+    if qq in _active_tasks:
+        del _active_tasks[qq]
 
 
 b50_cmd = on_command(
@@ -51,11 +59,9 @@ b50_cmd = on_command(
 )
 
 
-@b50_cmd.handle()
-async def _handle(matcher: Matcher, event: MessageEvent, args: Message = CommandArg()):
-    style = args.extract_plain_text().strip()
+async def _run_analysis(matcher: Matcher, event: MessageEvent, style: str):
     qq = event.get_user_id()
-
+    
     limit = _cfg.b50_daily_limit
     if limit > 0 and qq not in get_driver().config.superusers:
         used = get_today_usage(qq)
@@ -66,7 +72,7 @@ async def _handle(matcher: Matcher, event: MessageEvent, args: Message = Command
     await matcher.send("正在查询 B50，请稍候…")
 
     if style:
-        mod_result = check_user_input(style)
+        mod_result = await check_user_input(style)
         if not mod_result.get("allowed", True):
             if limit > 0 and qq not in get_driver().config.superusers:
                 increment_usage(qq)
@@ -84,7 +90,6 @@ async def _handle(matcher: Matcher, event: MessageEvent, args: Message = Command
 
     b50_data["_assets_path"] = _cfg.b50_assets_path
     context = build_context(b50_data, _peer_stats)
-    # 把实际使用的 QQ 写回 player，供头像拉取使用
     context["player"]["qq"] = qq
 
     if not _cfg.b50_llm_key:
@@ -97,22 +102,9 @@ async def _handle(matcher: Matcher, event: MessageEvent, args: Message = Command
         await matcher.finish(f"分析生成失败：{e}")
         return
 
+    # 直接解析JSON结果，不进行输出审查
     try:
-        _moderation_hits: list[tuple[str, str]] = []
         _parsed = json.loads(analysis_text)
-        for field in ("overall_roast", "impression_roast", "title"):
-            original = str(_parsed.get(field) or "")
-            if not original:
-                continue
-            checked = check_llm_output(original)
-            if checked.get("safe", True):
-                continue
-            _parsed[field] = checked.get("redacted", original)
-            category = str(checked.get("category") or "")
-            if category:
-                _moderation_hits.append((field, category))
-        if _moderation_hits:
-            analysis_text = json.dumps(_parsed, ensure_ascii=False)
         if isinstance(_parsed.get("push_recommendations"), list):
             context.setdefault("evidence", {})["push_recommendations"] = _parsed.get("push_recommendations") or []
     except Exception:
@@ -131,6 +123,30 @@ async def _handle(matcher: Matcher, event: MessageEvent, args: Message = Command
     if limit > 0 and qq not in get_driver().config.superusers:
         increment_usage(qq)
     await matcher.finish(MessageSegment.image(buf))
+
+
+@b50_cmd.handle()
+async def _handle(matcher: Matcher, event: MessageEvent, args: Message = CommandArg()):
+    style = args.extract_plain_text().strip()
+    qq = event.get_user_id()
+
+    # 检查是否正在进行分析
+    if qq in _active_tasks:
+        await matcher.finish("您正在进行分析，请稍等完成后再试~")
+        return
+
+    # 创建任务并添加到活动任务列表
+    task = asyncio.create_task(_run_analysis(matcher, event, style))
+    _active_tasks[qq] = task
+
+    try:
+        # 设置超时
+        await asyncio.wait_for(task, timeout=ANALYSIS_TIMEOUT)
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        # 无论成功还是失败，都释放锁
+        await _release_lock(qq)
 
 
 b50_reset_cmd = on_command(

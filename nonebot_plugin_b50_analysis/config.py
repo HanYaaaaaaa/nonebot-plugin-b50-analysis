@@ -13,6 +13,9 @@ class Config(BaseModel):
     b50_llm_model: str = "gemini-3-flash-preview"
     """使用的模型名称"""
 
+    b50_moderation_model: str = ""
+    """内容审查使用的模型名称，不配置则不进行AI审查"""
+
     b50_assets_path: str = ""
     """assets 目录路径，包含 ui/fonts、ui/icons、peer_stats.zip 等素材（必填）"""
 

@@ -174,13 +174,38 @@ class _Draw:
         lines: list[str] = []
         for raw in str(text or "").replace("\r", "").split("\n"):
             cur = ""
-            for ch in raw:
-                if font.getbbox(cur + ch)[2] > max_w:
-                    if cur:
-                        lines.append(cur)
-                    cur = ch
+            i = 0
+            while i < len(raw):
+                if raw[i:i+3] == "<r>":
+                    cur += "<r>"
+                    i += 3
+                elif raw[i:i+4] == "</r>":
+                    cur += "</r>"
+                    i += 4
+                elif font.getbbox(cur + raw[i])[2] <= max_w:
+                    cur += raw[i]
+                    i += 1
                 else:
-                    cur += ch
+                    if not cur:
+                        cur = raw[i]
+                        i += 1
+                        continue
+                    open_count = cur.count("<r>") - cur.count("</r>")
+                    if open_count > 0:
+                        close_pos = cur.rfind("</r>")
+                        open_pos = cur.rfind("<r>")
+                        if close_pos > open_pos:
+                            lines.append(cur[:close_pos + 4])
+                            cur = cur[close_pos + 4:]
+                        elif open_pos != -1:
+                            lines.append(cur[:open_pos])
+                            cur = cur[open_pos:]
+                        else:
+                            lines.append(cur)
+                            cur = ""
+                    else:
+                        lines.append(cur)
+                        cur = ""
             if cur:
                 lines.append(cur)
         return lines
@@ -379,11 +404,19 @@ class _Draw:
         fc_img = self.icon(FC_ICON.get(str(song.get("fc_label") or ""), ""), (72, 72))
         row2_y = y + 145
         gain_1005 = _i(song.get("gain_1005"))
+        gain_100 = _i(song.get("gain_100"))
         tag_x = tx
         score_end_x = tx
         if gain_1005 > 0:
             target = song.get("target", "SSS+")
             score_text = f"{target} +{gain_1005}"
+            self.d.text((tx, row2_y), score_text, font=self.font("en", 22), fill=(232, 124, 32))
+            score_end_x = tx + self.font("en", 22).getbbox(score_text)[2] + 8
+            if is_push:
+                tag_x = score_end_x
+        elif gain_100 > 0:
+            target = song.get("target", "SSS")
+            score_text = f"{target} +{gain_100}"
             self.d.text((tx, row2_y), score_text, font=self.font("en", 22), fill=(232, 124, 32))
             score_end_x = tx + self.font("en", 22).getbbox(score_text)[2] + 8
             if is_push:
@@ -413,7 +446,7 @@ class _Draw:
                 self.d.text((tx, reason_y), "推荐理由", font=self.font("cn", 16), fill=(160, 96, 32))
                 text_y = reason_y + 20
                 for line in reason_lines:
-                    self.d.text((tx, text_y), line, font=reason_font, fill=(95, 85, 65))
+                    self._draw_redt(line, tx, text_y, reason_font, (95, 85, 65))
                     text_y += reason_step
                 row3_y = max(row3_y, text_y + 2)
         chart_summaries = self.data.get("chart_summaries") or {}
@@ -509,7 +542,7 @@ class _Draw:
         return top_y + panel_h + 20
 
     def draw_footer(self, y: int) -> None:
-        text = "Designed by 寒桠@OneCatBot"
+        text = "Designed by 寒桠@OneCat Contributor by RAIN"
         f = self.font("cn", 28)
         tw = f.getbbox(text)[2]
         self.d.text(((CANVAS_W - tw) // 2, y), text, font=f, fill=(180, 140, 80))

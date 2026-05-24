@@ -160,6 +160,15 @@ def _prepare_push_song(song: dict, strategy_tag: str, reason: str | None = None)
     merged["achievement"] = round(_ach_pct(merged), 4)
     merged["achievements"] = merged["achievement"]
     merged["music_id"] = str(merged.get("music_id") or merged.get("song_id") or merged.get("musicId") or "")
+    
+    target = str(merged.get("target") or "")
+    if target == "100":
+        merged["target"] = "SSS"
+    elif target == "100.5":
+        merged["target"] = "SSS+"
+    elif not target:
+        merged["target"] = "SSS+"
+    
     return merged
 
 
@@ -185,7 +194,6 @@ def _select_push_recommendations(candidates: list[dict], config_profile: dict, u
             len(_song_tags(song)),
             max(_i(song.get("gain_1005"), 0), _i(song.get("gain_100"), 0)),
             -abs(99.5 - _ach_pct(song)),
-            -_i(song.get("play_count", song.get("playCount")), 0),
         )
 
     theme_pool = [s for s in filtered if _has_any_tag(s, focus_terms)]
@@ -384,7 +392,7 @@ overall_roast 是正文，一整段，不换行；如果用户要求短版，控
 格式示例：这张<r>交互</r>很适合练习<r>爆发</r>，能提高<r>准度</r>
 每一对 <r>...</r> 必须成对出现，禁止嵌套；严禁忘记包裹关键词！
 impression_roast 是一句总结，不超过 25 字。
-push_recommendations 是 3-4 首推分推荐，每项必须包含 title、strategy_tag、reason，可选 music_id、level_index、ds、achievement、target、gain_100、gain_1005。
+push_recommendations 是 3-4 首推分推荐，每项必须包含 title、strategy_tag、reason，可选 music_id、level_index、ds、achievement、target、gain_100、gain_1005。其中 reason（推荐理由）也需要使用 <r>关键词</r> 包裹配置词、玩家术语等重要词汇。
 输出严格 JSON，只保留 title、overall_roast、impression_roast、push_recommendations 四个字段。
 【重要】你的输出必须能被 json.loads() 正确解析。overall_roast 字段内的所有内容必须放在一行内，不得包含未转义的换行符、制表符或控制字符。不遵循此规则将导致程序崩溃。
 {style_instruction}"""

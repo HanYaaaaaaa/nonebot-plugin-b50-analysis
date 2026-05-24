@@ -16,7 +16,7 @@
 ## 安装
 
 ```bash
-nb install nonebot-plugin-b50-analysis
+nb plugin install nonebot-plugin-b50-analysis
 # 或
 pip install nonebot-plugin-b50-analysis
 ```
@@ -45,11 +45,15 @@ B50_LLM_MODEL=gemini-3-flash-preview
 
 # 必填：assets 目录路径（含字体、图标、peer_stats.zip、cover）
 B50_ASSETS_PATH=/path/to/assets
+
 # 必填：使用次数 0为无限
 B50_DAILY_LIMIT=5
-#可选: 水鱼开发者 token
+
+# 可选: 水鱼开发者 token
 MAIMAIDXTOKEN=xxx
 
+# 可选：内容审查使用的模型名称，不配置则不进行AI审查 推荐deepseek-v4-flash
+B50_MODERATION_MODEL=
 ```
 
 
@@ -70,11 +74,11 @@ MAIMAIDXTOKEN=xxx
 
 ## 更新说明
 
-- `05/17` 优化了制图，新增了 LLM 审查，可配置次数限制，新增了推分推荐模块，会根据用户需求或用户配置长短板综合推荐配置特化谱。
+- `05/24` 新增了 LLM 审查，可配置次数限制，新增了推分推荐模块，会根据用户需求或用户配置长短板综合推荐配置特化谱。
 
-## 鸣谢
+## 鸣谢  
 
-- 感谢贡献开发者：`f090`
+- 感谢贡献开发者：`RAIN(f090)`
 
 ## 免责声明
 
