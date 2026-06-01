@@ -25,7 +25,7 @@ pip install nonebot-plugin-b50-analysis
 
 ```bash
 # 下载并解压到任意目录，然后在 .env 中配置 B50_ASSETS_PATH
-curl -O http://dw.moant.cn:34274/assets.zip
+curl -O https://dw.moant.cn:34274/assets.zip
 unzip assets.zip -d /path/to/assets
 ```
 
