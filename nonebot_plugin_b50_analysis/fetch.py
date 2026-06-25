@@ -137,8 +137,7 @@ async def _fetch_dev_records(qq: str, dev_token: str) -> dict | None:
 
 
 _NEW_VERSION_POOL = {
-    "maimai でらっくす PRiSM",
-    "maimai でらっくす BUDDiES PLUS",
+    "maimai でらっくす PRiSM PLUS"
 }
 
 
